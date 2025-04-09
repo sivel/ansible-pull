@@ -1,0 +1,35 @@
+#!/usr/bin/env ansible-playbook
+# Copyright: Contributors to the Ansible project
+# GNU General Public License v3.0+ (see COPYING or https://www.gnu.org/licenses/gpl-3.0.txt)
+---
+- hosts: localhost
+  vars:
+    repo: https://github.com/sivel/ansible-pull-test.git
+    dest: /tmp/playbooks
+    playbook: ''
+    hostnames:
+      - '{{ ansible_facts.fqdn }}'
+      - '{{ ansible_facts.hostname }}'
+      - localhost
+    limit: '{{ hostnames|join(",") }}'
+  tasks:
+    - git:
+        repo: '{{ repo }}'
+        dest: '{{ dest }}'
+
+    - when: playbook == ""
+      block:
+      - find:
+          paths: '{{ dest }}'
+          recurse: no
+          use_regex: yes
+          patterns:
+            - '^({{ hostnames|map("regex_escape")|join("|") }}).yml$'
+        register: playbooks
+
+      - set_fact:
+          playbook: '{{ (playbooks.files|default([{"path": "site.yml"}], true)|first).path|basename }}'
+
+    - command:
+        chdir: '{{ dest }}'
+        argv: [ansible-playbook, -i, inventory, --limit, '{{ limit }}', '{{ playbook }}']
